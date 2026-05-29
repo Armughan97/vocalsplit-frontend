@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Attendance Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.8s ease-in-out;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .toast-enter { animation: slideIn 0.3s forwards; }
+        .toast-exit { animation: slideOut 0.3s forwards; }
+        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center z-20">
+        <div class="flex items-center gap-2">
+            <i data-lucide="clock" class="text-blue-600"></i>
+            <h1 class="text-xl font-bold text-gray-900">WorkTrack</h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Mock Mode</span>
+            <button id="mockToggle" class="w-12 h-6 rounded-full bg-gray-300 relative transition-colors duration-300 focus:outline-none">
+                <div id="mockKnob" class="w-4 h-4 rounded-full bg-white absolute top-1 left-1 transition-transform duration-300 shadow"></div>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto relative z-10" id="mainContainer">
+        
+        <!-- View: Working Hours (Main Screen) -->
+        <div id="viewMain" class="px-6 py-8 flex flex-col items-center max-w-md mx-auto hidden pb-24">
+            
+            <!-- Circular Progress -->
+            <div class="relative w-64 h-64 mb-8">
+                <svg class="w-full h-full" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="#e5e7eb" stroke-width="8" />
+                    <circle id="progressCircle" class="progress-ring__circle" cx="60" cy="60" r="54" fill="none" stroke="#3b82f6" stroke-width="8" stroke-dasharray="339.292" stroke-dashoffset="339.292" stroke-linecap="round" />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span id="hoursCompleted" class="text-3xl font-bold text-gray-900">0</span>
+                    <span class="text-sm text-gray-500 mt-1">/ <span id="hoursTarget">40</span> hours</span>
+                </div>
+            </div>
+
+            <!-- Recommendation Stats -->
+            <div class="bg-blue-50 text-blue-800 px-4 py-3 rounded-xl w-full mb-6 text-center text-sm font-medium border border-blue-100 shadow-sm">
+                Recommended: <span id="recommendedDaily">--</span> per day to hit target.
+            </div>
+
+            <!-- Core Action Buttons -->
+            <div class="w-full grid grid-cols-2 gap-4 mb-6">
+                <button id="btnIn" onclick="handlePunch('IN', 'NORMAL')" class="flex flex-col items-center justify-center p-4 bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-2xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i data-lucide="log-in" class="mb-2 w-6 h-6"></i>
+                    <span class="font-semibold">Punch In</span>
+                </button>
+                <button id="btnOut" onclick="handlePunch('OUT', 'NORMAL')" class="flex flex-col items-center justify-center p-4 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-2xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i data-lucide="log-out" class="mb-2 w-6 h-6"></i>
+                    <span class="font-semibold">Punch Out</span>
+                </button>
+            </div>
+
+            <!-- Leave Management -->
+            <div class="w-full">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Log Leaves (Adds 8 Hours)</h3>
+                <div class="flex flex-col gap-3">
+                    <button id="btnLeavePH" onclick="toggleLeave('PUBLIC_HOLIDAY')" class="w-full flex items-center justify-between p-4 bg-purple-50 text-purple-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold border border-purple-200">
+                        <div class="flex items-center gap-3"><i data-lucide="party-popper" class="w-5 h-5"></i> Public Holiday</div>
+                        <i data-lucide="check-circle" class="w-5 h-5 hidden indicator"></i>
+                    </button>
+                    <button id="btnLeaveAL" onclick="toggleLeave('ANNUAL_LEAVE')" class="w-full flex items-center justify-between p-4 bg-blue-50 text-blue-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold border border-blue-200">
+                        <div class="flex items-center gap-3"><i data-lucide="palmtree" class="w-5 h-5"></i> Annual Leave</div>
+                        <i data-lucide="check-circle" class="w-5 h-5 hidden indicator"></i>
+                    </button>
+                    <button id="btnLeaveSL" onclick="toggleLeave('SICK_LEAVE')" class="w-full flex items-center justify-between p-4 bg-orange-50 text-orange-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold border border-orange-200">
+                        <div class="flex items-center gap-3"><i data-lucide="thermometer" class="w-5 h-5"></i> Sick Leave</div>
+                        <i data-lucide="check-circle" class="w-5 h-5 hidden indicator"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Off Hours Rest -->
+        <div id="viewRest" class="px-6 py-12 flex flex-col items-center justify-center text-center max-w-md mx-auto hidden h-full">
+            <div class="bg-indigo-50 p-6 rounded-full mb-6">
+                <i data-lucide="moon" class="w-16 h-16 text-indigo-400"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">System Offline</h2>
+            <p class="text-gray-500">System is active Mon-Fri between 6:00 AM and 12:00 AM.</p>
+            <p class="text-indigo-600 font-medium mt-4">Take rest and enjoy your time off! ☕</p>
+        </div>
+
+        <!-- View: History -->
+        <div id="viewHistory" class="px-6 py-6 max-w-md mx-auto hidden pb-24">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800">Attendance History</h2>
+                <button onclick="downloadCSV()" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="historyList" class="space-y-4"></div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bg-white border-t border-gray-100 flex justify-around pb-safe pt-2 px-2 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-4 fixed bottom-0 w-full">
+        <button onclick="switchTab('main')" id="tabMain" class="flex-1 py-2 flex flex-col items-center text-blue-600 transition-colors">
+            <i data-lucide="home" class="mb-1 w-6 h-6"></i>
+            <span class="text-xs font-medium">Home</span>
+        </button>
+        <button onclick="switchTab('history')" id="tabHistory" class="flex-1 py-2 flex flex-col items-center text-gray-400 hover:text-gray-600 transition-colors">
+            <i data-lucide="list" class="mb-1 w-6 h-6"></i>
+            <span class="text-xs font-medium">History</span>
+        </button>
+    </nav>
+
+    <div id="toastContainer" class="fixed bottom-24 left-0 right-0 z-50 flex flex-col items-center space-y-2 pointer-events-none px-4"></div>
+
+    <script>
+        lucide.createIcons();
+
+        const API_BASE = 'http://localhost:8000';
+        let isMockMode = false;
+        let currentTab = 'main';
+        let currentStateData = null;
+
+        const MockBackend = {
+            logs: JSON.parse(localStorage.getItem('mockLogs') || '[]'),
+            save() { localStorage.setItem('mockLogs', JSON.stringify(this.logs)); },
+            handle(action, category) {
+                const now = new Date();
+                if (now.getDay() === 0 || now.getDay() === 6 || now.getHours() < 6) return { error: "Outside working hours" };
+                this.logs.push({ timestamp: now.toISOString(), action, category });
+                this.save();
+                return { success: true };
+            },
+            getStatus() {
+                const now = new Date();
+                const isWorking = now.getDay() > 0 && now.getDay() < 6 && now.getHours() >= 6;
+                if (!isWorking) return { is_working_hours: false };
+
+                const d = new Date(now);
+                const day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
+                const weekStart = new Date(d.setDate(diff)).setHours(0,0,0,0);
+                
+                let weekLogs = this.logs.filter(l => new Date(l.timestamp) >= weekStart);
+                let state = 'OUT';
+                let activeLeaveToday = null;
+                let totalSeconds = 0;
+                let lastIn = null;
+                
+                const days = {};
+                weekLogs.forEach(log => {
+                    const lDate = new Date(log.timestamp);
+                    const dateKey = lDate.toDateString();
+                    if (!days[dateKey]) days[dateKey] = { events: [], leave_type: null };
+                    
+                    if (log.action === 'LEAVE') days[dateKey].leave_type = log.category;
+                    else if (log.action === 'CANCEL_LEAVE') days[dateKey].leave_type = null;
+                    else days[dateKey].events.push(log);
+
+                    if (dateKey === now.toDateString()) {
+                        activeLeaveToday = days[dateKey].leave_type;
+                    }
+                });
+
+                for (const [dk, data] of Object.entries(days)) {
+                    if (data.leave_type) {
+                        totalSeconds += 8 * 3600;
+                        if (dk === now.toDateString()) state = 'OUT'; // Override IN status if leave active
+                    } else {
+                        let dayDur = 0;
+                        let inTime = null;
+                        data.events.forEach(ev => {
+                            if (ev.action === 'IN') { inTime = new Date(ev.timestamp); state = 'IN'; lastIn = inTime; }
+                            if (ev.action === 'OUT') { if (inTime) dayDur += (new Date(ev.timestamp) - inTime) / 1000; inTime = null; state = 'OUT'; }
+                        });
+                        totalSeconds += dayDur;
+                    }
+                }
+
+                if (state === 'IN' && lastIn && !activeLeaveToday) {
+                    totalSeconds += (now - lastIn) / 1000;
+                }
+
+                let target = 40;
+                let completed = totalSeconds / 3600;
+                let remainingDays = 5 - (now.getDay() - 1);
+                if (now.getHours() >= 17) remainingDays = Math.max(0, remainingDays - 1);
+
+                let rec = remainingDays > 0 ? (target - completed) / remainingDays : 0;
+
+                return {
+                    is_working_hours: true,
+                    state: state,
+                    active_leave_today: activeLeaveToday,
+                    completed_hours: parseFloat(completed.toFixed(2)),
+                    target_hours: target,
+                    recommended_hours: Math.floor(Math.max(0, rec)),
+                    recommended_mins: Math.floor((Math.max(0, rec) % 1) * 60)
+                };
+            },
+            getHistory() {
+                // Simplified mock mapping, real detailed formatting relies on backend
+                return { weeks: [] };
+            }
+        };
+
+        async function apiCall(endpoint, options = {}) {
+            if (isMockMode) {
+                await new Promise(r => setTimeout(r, 200));
+                if (endpoint === '/api/status' && options.method === 'GET') return MockBackend.getStatus();
+                if (endpoint === '/api/punch' && options.method === 'POST') {
+                    const body = JSON.parse(options.body);
+                    const res = MockBackend.handle(body.action, body.category);
+                    if (res.error) throw new Error(res.error);
+                    return res;
+                }
+                if (endpoint === '/api/history') return MockBackend.getHistory();
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    ...options,
+                    headers: { 'Content-Type': 'application/json', ...options.headers }
+                });
+                if (!res.ok) {
+                    if (res.status === 404) throw new Error('404: Endpoint not found');
+                    if (res.status === 500) throw new Error('500: Internal Server Error');
+                    if (res.status === 502) throw new Error('502: Bad Gateway');
+                    const errData = await res.json().catch(()=>({}));
+                    throw new Error(errData.detail || `Error ${res.status}`);
+                }
+                if (options.isDownload) return res.blob();
+                return await res.json();
+            } catch (err) {
+                if (err.name === 'TypeError' && err.message.includes('fetch')) throw new Error('Network Error - Server unreachable');
+                throw err;
+            }
+        }
+
+        async function refreshUI() {
+            try {
+                if (currentTab === 'main') {
+                    const data = await apiCall('/api/status', { method: 'GET' });
+                    currentStateData = data;
+                    
+                    if (!data.is_working_hours) {
+                        document.getElementById('viewMain').classList.add('hidden');
+                        document.getElementById('viewRest').classList.remove('hidden');
+                        return;
+                    }
+
+                    document.getElementById('viewRest').classList.add('hidden');
+                    document.getElementById('viewMain').classList.remove('hidden');
+
+                    document.getElementById('hoursCompleted').innerText = data.completed_hours.toFixed(1);
+                    document.getElementById('hoursTarget').innerText = data.target_hours;
+                    document.getElementById('recommendedDaily').innerText = 
+                        data.recommended_hours > 0 || data.recommended_mins > 0 
+                        ? `${data.recommended_hours}h ${data.recommended_mins}m` 
+                        : "Target met! 🎉";
+
+                    const circle = document.getElementById('progressCircle');
+                    const circumference = 54 * 2 * Math.PI;
+                    const percent = Math.min(data.completed_hours / data.target_hours, 1);
+                    circle.style.strokeDashoffset = circumference - (percent * circumference);
+
+                    // Setup buttons based on leave status
+                    const leaveActive = data.active_leave_today;
+                    
+                    // Punch Buttons
+                    document.getElementById('btnIn').disabled = leaveActive ? true : (data.state === 'IN');
+                    document.getElementById('btnOut').disabled = leaveActive ? true : (data.state !== 'IN');
+
+                    // Leave Buttons styling map
+                    const leaves = [
+                        { id: 'btnLeavePH', key: 'PUBLIC_HOLIDAY', base: 'bg-purple-50 text-purple-700', active: 'bg-purple-600 text-white shadow-lg' },
+                        { id: 'btnLeaveAL', key: 'ANNUAL_LEAVE', base: 'bg-blue-50 text-blue-700', active: 'bg-blue-600 text-white shadow-lg' },
+                        { id: 'btnLeaveSL', key: 'SICK_LEAVE', base: 'bg-orange-50 text-orange-700', active: 'bg-orange-600 text-white shadow-lg' }
+                    ];
+
+                    leaves.forEach(l => {
+                        const el = document.getElementById(l.id);
+                        const indicator = el.querySelector('.indicator');
+                        
+                        // Reset classes
+                        el.className = `w-full flex items-center justify-between p-4 rounded-xl transition-all font-semibold border ${l.base}`;
+                        indicator.classList.add('hidden');
+                        el.disabled = false;
+
+                        if (leaveActive) {
+                            if (leaveActive === l.key) {
+                                // This is the active leave
+                                el.className = `w-full flex items-center justify-between p-4 rounded-xl transition-all font-semibold border-transparent ${l.active}`;
+                                indicator.classList.remove('hidden');
+                            } else {
+                                // Other leaves are disabled
+                                el.disabled = true;
+                                el.classList.add('opacity-50', 'cursor-not-allowed');
+                            }
+                        }
+                    });
+
+                } else {
+                    const data = await apiCall('/api/history', { method: 'GET' });
+                    renderHistory(data.weeks);
+                }
+            } catch (e) {
+                console.error(e);
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function handlePunch(action, category = 'NORMAL') {
+            try {
+                await apiCall('/api/punch', { method: 'POST', body: JSON.stringify({ action, category }) });
+                
+                let msg = `Logged ${action}`;
+                if (action === 'LEAVE') msg = `${category.replace('_', ' ')} applied (8h added)`;
+                if (action === 'CANCEL_LEAVE') msg = `Leave removed`;
+                
+                showToast(msg, 'success');
+                refreshUI();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function toggleLeave(category) {
+            if (!currentStateData) return;
+            if (currentStateData.active_leave_today === category) {
+                handlePunch('CANCEL_LEAVE', 'NORMAL'); // Remove it
+            } else {
+                handlePunch('LEAVE', category); // Set it
+            }
+        }
+
+        async function downloadCSV() {
+            if (isMockMode) {
+                showToast("Downloads disabled in Mock Mode", "error");
+                return;
+            }
+            try {
+                const blob = await apiCall('/api/download', { method: 'GET', isDownload: true });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `attendance_export_${new Date().getTime()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                showToast("Download started", "success");
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function renderHistory(weeks) {
+            const container = document.getElementById('historyList');
+            if (!weeks || weeks.length === 0) {
+                container.innerHTML = `<div class="text-center text-gray-500 py-8">No records found.</div>`;
+                return;
+            }
+
+            container.innerHTML = weeks.map((week, i) => `
+                <details class="group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden" ${i===0 ? 'open' : ''}>
+                    <summary class="flex justify-between items-center font-medium cursor-pointer list-none p-4 bg-gray-50 group-open:bg-blue-50 transition-colors">
+                        <span class="text-gray-800">${week.date_range}</span>
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm font-bold ${week.target_met ? 'text-green-600' : 'text-blue-600'}">
+                                ${week.total_hours.toFixed(1)} / ${week.target_hours}h
+                            </span>
+                            <span class="transition group-open:rotate-180">
+                                <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400"></i>
+                            </span>
+                        </div>
+                    </summary>
+                    <div class="p-4 bg-white border-t border-gray-50 text-sm">
+                        ${week.days.map(day => `
+                            <div class="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                                <div>
+                                    <div class="font-semibold text-gray-700">${day.date}</div>
+                                    <div class="text-xs ${day.leave_type ? 'text-purple-600 font-medium' : 'text-gray-500'}">
+                                        ${day.leave_type ? day.leave_type.replace('_', ' ') : `In: ${day.first_in || '--'} | Out: ${day.last_out || '--'}`}
+                                    </div>
+                                </div>
+                                <div class="font-mono ${day.leave_type ? 'text-purple-700' : 'text-gray-600'}">${day.duration_hours.toFixed(2)}h</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('viewMain').classList.add('hidden');
+            document.getElementById('viewRest').classList.add('hidden');
+            document.getElementById('viewHistory').classList.add('hidden');
+            
+            if (tab === 'main') refreshUI();
+            if (tab === 'history') {
+                document.getElementById('viewHistory').classList.remove('hidden');
+                refreshUI();
+            }
+
+            document.getElementById('tabMain').className = `flex-1 py-2 flex flex-col items-center transition-colors ${tab === 'main' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`;
+            document.getElementById('tabHistory').className = `flex-1 py-2 flex flex-col items-center transition-colors ${tab === 'history' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`;
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const colors = { success: 'bg-green-800', error: 'bg-red-800', info: 'bg-gray-800' };
+            toast.className = `px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${colors[type]} toast-enter max-w-sm text-center w-full`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace('toast-enter', 'toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        document.getElementById('mockToggle').addEventListener('click', (e) => {
+            isMockMode = !isMockMode;
+            const btn = e.currentTarget;
+            const knob = document.getElementById('mockKnob');
+            if (isMockMode) {
+                btn.classList.replace('bg-gray-300', 'bg-blue-500');
+                knob.classList.add('translate-x-6');
+                showToast('Mock Mode Enabled', 'info');
+            } else {
+                btn.classList.replace('bg-blue-500', 'bg-gray-300');
+                knob.classList.remove('translate-x-6');
+                showToast('Live Mode Enabled', 'info');
+            }
+            refreshUI();
+        });
+
+        switchTab('main');
+        setInterval(() => {
+            if (currentTab === 'main' && document.getElementById('viewRest').classList.contains('hidden')) refreshUI();
+        }, 60000);
+    </script>
+</body>
+</html>
