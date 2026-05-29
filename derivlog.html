@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DerivLog - Work Achievement Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        deriv: {
+                            red: '#ff444f',
+                            'red-hover': '#e63d46',
+                            dark: '#0e1013',
+                            cardDark: '#15181f',
+                            borderDark: '#20242f',
+                            lightBg: '#f4f6f8',
+                            lightCard: '#ffffff',
+                            borderLight: '#e1e5ea'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'IBM Plex Sans', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff444f; }
+    </style>
+</head>
+<body class="bg-deriv-lightBg text-gray-800 dark:bg-deriv-dark dark:text-gray-100 min-h-screen flex flex-col antialiased pb-12 transition-colors duration-200">
+
+    <!-- Top Banner: Mode Status -->
+    <div id="status-banner" class="hidden w-full text-center py-2 px-4 text-xs font-semibold"></div>
+
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-40 w-full border-b border-deriv-borderLight dark:border-deriv-borderDark bg-deriv-lightCard/90 dark:bg-deriv-cardDark/90 backdrop-blur-md">
+        <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <a href="index.html" class="p-2 text-gray-400 dark:text-gray-500 hover:text-deriv-red hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </a>
+                <span class="text-xl font-bold tracking-tight">DerivLog</span>
+                <span class="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full bg-deriv-red/10 text-deriv-red border border-deriv-red/20">
+                    Ambit Edition
+                </span>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <button id="sandbox-toggle" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-yellow-200 dark:border-yellow-900/40 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400 text-xs font-semibold hover:opacity-90 active:scale-95 duration-75">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></span>
+                    <span class="hidden md:inline font-bold">Sandbox Mode</span>
+                </button>
+                <button id="vps-config-btn" onclick="toggleVpsConfig()" class="p-2 rounded-xl border border-deriv-borderLight dark:border-deriv-borderDark hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+                <button id="theme-toggle" class="p-2 rounded-xl border border-deriv-borderLight dark:border-deriv-borderDark hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    <i data-lucide="moon" class="w-5 h-5" id="themeIcon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl w-full mx-auto px-4 mt-8 space-y-6 flex-grow">
+
+        <!-- VPS Config Panel (Hidden) -->
+        <div id="vpsConfigPanel" class="hidden bg-deriv-lightCard dark:bg-deriv-cardDark border border-deriv-borderLight dark:border-deriv-borderDark rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Database Engine Configuration</h4>
+                <button onclick="toggleVpsConfig()" class="text-xs text-deriv-red font-semibold">Hide Config</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Select Active Engine Mode</label>
+                    <select id="engineModeSelect" onchange="changeEngineMode()" class="w-full bg-gray-50 dark:bg-deriv-dark border border-deriv-borderLight dark:border-deriv-borderDark rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-deriv-red outline-none">
+                        <option value="vps">Production (Connected to OCI Backend)</option>
+                        <option value="sandbox">Sandbox (Store in Browser LocalStorage)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">FastAPI Backend API Base URL</label>
+                    <input type="url" id="vpsApiUrlInput" placeholder="https://vocalsplit-api.duckdns.org" 
+                        class="w-full bg-gray-50 dark:bg-deriv-dark border border-deriv-borderLight dark:border-deriv-borderDark rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-deriv-red outline-none">
+                </div>
+            </div>
+        </div>
+
+        <!-- Welcome Motivation Banner -->
+        <div class="relative overflow-hidden rounded-2xl border border-deriv-borderLight dark:border-deriv-borderDark bg-deriv-lightCard dark:bg-deriv-cardDark p-6 md:p-8 shadow-sm">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-deriv-red/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div class="space-y-3">
+                    <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight">
+                        Hi <span class="underline decoration-deriv-red decoration-2 underline-offset-4">Armughan!</span> 👋
+                    </h1>
+                    <p class="text-gray-600 dark:text-gray-300 font-normal leading-relaxed text-sm md:text-base max-w-xl">
+                        Today is <span id="currentDateStr" class="font-bold text-deriv-red">28th of May 2026</span>. 
+                        <span id="motivationalMessage" class="italic">Let's write down what you achieved at work today to lock in your next career milestone!</span>
+                    </p>
+                </div>
+                
+                <div class="flex gap-4 border-t border-deriv-borderLight dark:border-deriv-borderDark pt-4 md:pt-0 md:border-t-0 pl-0 md:pl-6 md:border-l">
+                    <div class="text-center">
+                        <span id="statCount" class="block text-3xl font-extrabold text-deriv-red font-mono">0</span>
+                        <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Wins Logged</span>
+                    </div>
+                    <div class="text-center min-w-[80px]">
+                        <span id="statStreak" class="block text-3xl font-extrabold text-emerald-500 font-mono">0</span>
+                        <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Day Streak</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Selector Menu -->
+        <div class="flex border-b border-deriv-borderLight dark:border-deriv-borderDark">
+            <button id="writeTabBtn" onclick="setActiveTab('write')" class="flex-1 sm:flex-none py-3 px-6 font-semibold text-sm border-b-2 border-deriv-red text-deriv-red flex items-center justify-center space-x-2">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                <span>Log Achievement</span>
+            </button>
+            <button id="historyTabBtn" onclick="setActiveTab('history')" class="flex-1 sm:flex-none py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-deriv-red flex items-center justify-center space-x-2">
+                <i data-lucide="history" class="w-4 h-4"></i>
+                <span>View History</span>
+            </button>
+        </div>
+
+        <!-- TAB CONTENT: WRITE / LOG -->
+        <div id="tabWrite" class="space-y-4">
+            <form id="accomplishment-form" class="bg-deriv-lightCard dark:bg-deriv-cardDark border border-deriv-borderLight dark:border-deriv-borderDark rounded-2xl p-6 shadow-sm space-y-5">
+                
+                <!-- Category Tags -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2.5">Category Tag</label>
+                    <div class="flex flex-wrap gap-3">
+                        <label class="border border-deriv-borderLight dark:border-deriv-borderDark rounded-lg px-3 py-2 flex items-center justify-center text-xs gap-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <input type="radio" name="tag" value="Feature" checked class="accent-deriv-red hidden">
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <span class="font-semibold">Feature</span>
+                        </label>
+                        <label class="border border-deriv-borderLight dark:border-deriv-borderDark rounded-lg px-3 py-2 flex items-center justify-center text-xs gap-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <input type="radio" name="tag" value="Bugfix" class="accent-deriv-red hidden">
+                            <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                            <span class="font-semibold">Bugfix</span>
+                        </label>
+                        <label class="border border-deriv-borderLight dark:border-deriv-borderDark rounded-lg px-3 py-2 flex items-center justify-center text-xs gap-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <input type="radio" name="tag" value="Optimization" class="accent-deriv-red hidden">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span class="font-semibold">Optimization</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Text Area -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="achievementText" class="block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                            Work Summary & Impact
+                        </label>
+                        <span id="charCount" class="text-xs font-mono text-gray-400">0 / 2000 chars</span>
+                    </div>
+                    <textarea id="achievementText" rows="5" required maxlength="2000"
+                        class="w-full bg-gray-50 dark:bg-[#0a0c0f] border border-deriv-borderLight dark:border-deriv-borderDark rounded-xl p-4 focus:ring-2 focus:ring-deriv-red/50 focus:border-deriv-red outline-none transition-all resize-y placeholder-gray-400 dark:placeholder-gray-600 leading-relaxed text-sm md:text-base font-normal custom-scrollbar"
+                        placeholder="Optimized the low-latency web transaction queues by 22%, improving real-time tick synchronization..."></textarea>
+                </div>
+                
+                <!-- Prompt Helpers & Submit -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="insertPromptHelper('Optimized ')" class="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-deriv-red hover:text-white transition-all font-medium">
+                            ✨ Optimized...
+                        </button>
+                        <button type="button" onclick="insertPromptHelper('Resolved the ')" class="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-deriv-red hover:text-white transition-all font-medium">
+                            🛠️ Resolved...
+                        </button>
+                        <button type="button" onclick="insertPromptHelper('Led the ')" class="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-deriv-red hover:text-white transition-all font-medium">
+                            🚀 Led...
+                        </button>
+                    </div>
+
+                    <button type="submit" class="bg-deriv-red hover:bg-deriv-red-hover text-white font-bold text-sm px-6 py-3 rounded-xl transition-all shadow-lg shadow-deriv-red/20 active:scale-95 flex items-center justify-center space-x-2 w-full sm:w-auto tracking-wide">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                        <span>Save Achievement</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- TAB CONTENT: HISTORY -->
+        <div id="tabHistory" class="space-y-4 hidden">
+            <!-- Search & Actions Bar -->
+            <div class="flex flex-col md:flex-row md:items-center gap-4 justify-between bg-deriv-lightCard dark:bg-deriv-cardDark border border-deriv-borderLight dark:border-deriv-borderDark p-4 rounded-2xl shadow-sm">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </span>
+                    <input type="text" id="searchQuery" 
+                        class="w-full bg-gray-50 dark:bg-[#0a0c0f] border border-deriv-borderLight dark:border-deriv-borderDark rounded-lg pl-10 pr-4 py-2 outline-none text-sm focus:ring-2 focus:ring-deriv-red/50 focus:border-deriv-red transition-all"
+                        placeholder="Search logged tasks, dates, keywords...">
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="btn-download-txt" class="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white text-white dark:text-gray-900 text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-sm">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>
+                        <span>Export .TXT</span>
+                    </button>
+                    <button id="btn-download-csv" class="flex-1 sm:flex-none px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-sm">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i>
+                        <span>Export CSV</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Timeline -->
+            <div id="timelineContainer" class="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <!-- Items render dynamically -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal for editing -->
+    <div id="editModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 hidden backdrop-blur-sm transition-opacity duration-200 opacity-0">
+        <div class="bg-deriv-lightCard dark:bg-deriv-cardDark border border-deriv-borderLight dark:border-deriv-borderDark rounded-2xl p-6 w-full max-w-lg shadow-2xl transform scale-95 transition-all duration-200">
+            <h3 class="text-lg font-bold mb-4">Edit Achievement</h3>
+            <textarea id="modalEditInput" rows="5" 
+                class="w-full bg-gray-50 dark:bg-[#0a0c0f] border border-deriv-borderLight dark:border-deriv-borderDark rounded-xl p-4 focus:ring-2 focus:ring-deriv-red focus:border-transparent outline-none transition-all resize-y text-sm mb-4 custom-scrollbar"></textarea>
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeEditModal()" class="px-4 py-2 rounded-xl text-sm font-semibold border border-deriv-borderLight dark:border-deriv-borderDark hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
+                    Cancel
+                </button>
+                <button onclick="submitEdit()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-deriv-red hover:bg-deriv-red-hover text-white shadow-md shadow-deriv-red/20 transition-all">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Toast Alert Manager -->
+    <div id="toast-manager" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <script>
+        // VPS Settings state load
+        let appConfig = {
+            mode: localStorage.getItem('deriv_log_mode') || 'vps', 
+            apiUrl: localStorage.getItem('vocal_split_api_url') || 'https://vocalsplit-api.duckdns.org'
+        };
+
+        const state = {
+            isSandbox: appConfig.mode === 'sandbox',
+            darkMode: false,
+            accomplishments: [],
+            searchQuery: '',
+            editingId: null
+        };
+
+        // Selectors
+        const sandboxToggleBtn = document.getElementById('sandbox-toggle');
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const banner = document.getElementById('status-banner');
+        const timelineContainer = document.getElementById('timelineContainer');
+        const searchInput = document.getElementById('searchQuery');
+        const winForm = document.getElementById('accomplishment-form');
+        const winTextInput = document.getElementById('achievementText');
+        const charCount = document.getElementById('charCount');
+
+        // Initial setup
+        document.getElementById('currentDateStr').innerText = getFormattedDate();
+        
+        function getFormattedDate(dateObj = new Date()) {
+            const day = dateObj.getDate();
+            const year = dateObj.getFullYear();
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            let suffix = 'th';
+            if (day < 11 || day > 13) {
+                switch (day % 10) { case 1: suffix = 'st'; break; case 2: suffix = 'nd'; break; case 3: suffix = 'rd'; break; }
+            }
+            return `${day}${suffix} of ${months[dateObj.getMonth()]} ${year}`;
+        }
+
+        const quotes = [
+            "Great achievements are built on small, daily triumphs.",
+            "Excellence is not an act, but a habit. Reflecting on your daily impact keeps you growing.",
+            "Write your achievements today so they write your promotion story tomorrow.",
+            "Behind every successful project lies a series of minor daily solutions."
+        ];
+        document.getElementById('motivationalMessage').innerText = quotes[Math.floor(Math.random() * quotes.length)];
+
+        function triggerToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            const colors = type === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-800 dark:text-emerald-300' :
+                           type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-800 dark:text-amber-300' :
+                                                'bg-rose-50 dark:bg-rose-950/40 border-rose-200 text-rose-800 dark:text-rose-300';
+            const iconColor = type === 'success' ? 'bg-emerald-500' : type === 'warning' ? 'bg-amber-500' : 'bg-rose-500';
+            
+            toast.className = `p-4 rounded-xl shadow-lg border text-sm font-semibold pointer-events-auto transform translate-y-2 transition-all duration-300 flex items-center gap-3 ${colors}`;
+            toast.innerHTML = `
+                <span class="w-2.5 h-2.5 rounded-full ${iconColor}"></span>
+                <span>${message}</span>
+            `;
+            document.getElementById('toast-manager').appendChild(toast);
+            
+            setTimeout(() => { toast.classList.remove('translate-y-2'); toast.classList.add('translate-y-0'); }, 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function setBannerState(show, text = '', colorClasses = '') {
+            if (!show) { banner.className = "hidden"; return; }
+            banner.className = `block w-full text-center py-2.5 px-4 text-xs font-bold tracking-wide shadow-sm ${colorClasses}`;
+            banner.innerHTML = text;
+        }
+
+        const SandboxStorage = {
+            load: () => JSON.parse(localStorage.getItem('deriv_accomplishments') || '[]'),
+            save: (data) => localStorage.setItem('deriv_accomplishments', JSON.stringify(data)),
+            add: (item) => {
+                const current = SandboxStorage.load();
+                current.unshift(item);
+                SandboxStorage.save(current);
+                return current;
+            },
+            update: (id, newText) => {
+                const current = SandboxStorage.load();
+                const idx = current.findIndex(x => x.id === id);
+                if(idx > -1) { current[idx].accomplishment = newText; SandboxStorage.save(current); }
+                return current;
+            },
+            remove: (id) => {
+                let current = SandboxStorage.load();
+                current = current.filter(x => x.id !== id);
+                SandboxStorage.save(current);
+                return current;
+            }
+        };
+
+        // Theme and Configuration panel operations
+        themeToggleBtn.addEventListener('click', () => {
+            state.darkMode = !state.darkMode;
+            localStorage.setItem('theme_dark', state.darkMode);
+            document.documentElement.classList.toggle('dark');
+            const icon = document.getElementById("themeIcon");
+            if (state.darkMode) {
+                icon.setAttribute('data-lucide', 'sun');
+            } else {
+                icon.setAttribute('data-lucide', 'moon');
+            }
+            lucide.createIcons();
+        });
+
+        function toggleVpsConfig() {
+            const panel = document.getElementById('vpsConfigPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function changeEngineMode() {
+            const select = document.getElementById('engineModeSelect');
+            state.isSandbox = select.value === 'sandbox';
+            localStorage.setItem('deriv_log_mode', select.value);
+            updateSandboxUI();
+            fetchData();
+        }
+
+        function initTheme() {
+            const savedDark = localStorage.getItem('theme_dark') === 'true';
+            state.darkMode = savedDark;
+            const icon = document.getElementById("themeIcon");
+            if (savedDark) {
+                document.documentElement.classList.add('dark');
+                icon.setAttribute('data-lucide', 'sun');
+            } else {
+                icon.setAttribute('data-lucide', 'moon');
+            }
+        }
+
+        function updateSandboxUI() {
+            const select = document.getElementById('engineModeSelect');
+            const vpsInput = document.getElementById('vpsApiUrlInput');
+            
+            select.value = state.isSandbox ? 'sandbox' : 'vps';
+            vpsInput.value = appConfig.apiUrl;
+
+            vpsInput.oninput = (e) => {
+                appConfig.apiUrl = e.target.value.trim();
+                localStorage.setItem('vocal_split_api_url', appConfig.apiUrl);
+            };
+
+            if (state.isSandbox) {
+                sandboxToggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/40 dark:bg-yellow-950/20 dark:text-yellow-400 text-xs font-semibold transition-all";
+                sandboxToggleBtn.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse"></span><span class="hidden md:inline font-bold">Sandbox Mode</span>`;
+                setBannerState(true, '⚡ Running in Sandboxed Mode (Local Storage Mock). No active connection to your VPS server required!', 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300');
+            } else {
+                sandboxToggleBtn.className = "flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400 text-xs font-semibold transition-all";
+                sandboxToggleBtn.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span class="hidden md:inline font-bold">Connected to Cloud</span>`;
+                setBannerState(false);
+            }
+        }
+
+        sandboxToggleBtn.addEventListener('click', () => {
+            state.isSandbox = !state.isSandbox;
+            localStorage.setItem('deriv_log_mode', state.isSandbox ? 'sandbox' : 'vps');
+            updateSandboxUI();
+            fetchData();
+        });
+
+        function recalculateStats() {
+            document.getElementById('statCount').innerText = state.accomplishments.length;
+            const uniqueDates = [...new Set(state.accomplishments.map(x => x.date_str))];
+            document.getElementById('statStreak').innerText = uniqueDates.length;
+        }
+
+        function renderHistory() {
+            const query = state.searchQuery.toLowerCase().trim();
+            const filtered = state.accomplishments.filter(item => 
+                item.accomplishment.toLowerCase().includes(query) || 
+                item.date_str.toLowerCase().includes(query) ||
+                (item.tag && item.tag.toLowerCase().includes(query))
+            );
+
+            if (filtered.length === 0) {
+                timelineContainer.innerHTML = `
+                    <div class="text-center py-12 bg-deriv-lightCard dark:bg-deriv-cardDark border border-dashed border-deriv-borderLight dark:border-deriv-borderDark rounded-2xl">
+                        <i data-lucide="folder-open" class="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3 block"></i>
+                        <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">No achievements found.</p>
+                    </div>`;
+                return;
+            }
+
+            timelineContainer.innerHTML = filtered.map(item => {
+                let tagColor = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
+                if (item.tag === 'Bugfix') tagColor = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+                if (item.tag === 'Optimization') tagColor = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
+
+                return `
+                    <div class="relative group bg-deriv-lightCard dark:bg-deriv-cardDark border border-deriv-borderLight dark:border-deriv-borderDark rounded-xl p-5 hover:border-deriv-red/40 transition-all duration-200 shadow-sm">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-xs font-bold text-gray-600 dark:text-gray-300"><i class="fa-regular fa-calendar mr-1"></i> ${item.date_str}</span>
+                                <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-lg ${tagColor}">${item.tag || 'Work'}</span>
+                            </div>
+                            <div class="flex items-center space-x-1.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                <button onclick="copyToClipboard('${item.id}')" class="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all" title="Copy text">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="openEditModal('${item.id}')" class="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all" title="Edit entry">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteAchievement('${item.id}')" class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all" title="Delete entry">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-200 whitespace-pre-wrap">${escapeHtml(item.accomplishment)}</p>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        async function fetchData() {
+            if (state.isSandbox) {
+                state.accomplishments = SandboxStorage.load();
+                recalculateStats(); renderHistory();
+                return;
+            }
+            try {
+                const res = await fetch(`${appConfig.apiUrl}/api/accomplishments`);
+                if (res.ok) {
+                    state.accomplishments = await res.json();
+                    setBannerState(false);
+                } else throw new Error('Gateway Error');
+            } catch (err) {
+                state.isSandbox = true; 
+                updateSandboxUI();
+                state.accomplishments = SandboxStorage.load();
+                triggerToast("Server connection failed. Reverted to Sandbox mode.", "warning");
+            } finally {
+                recalculateStats(); renderHistory();
+            }
+        }
+
+        winForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const textValue = winTextInput.value.strip ? winTextInput.value.strip() : winTextInput.value.trim();
+            const activeTag = document.querySelector('input[name="tag"]:checked')?.value || 'Feature';
+            if (!textValue) return;
+
+            const newRecord = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                date_str: getFormattedDate(),
+                tag: activeTag,
+                accomplishment: textValue
+            };
+
+            if (state.isSandbox) {
+                state.accomplishments = SandboxStorage.add(newRecord);
+                resetForm();
+                triggerToast('Saved locally in Sandbox!');
+                setActiveTab('history');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${appConfig.apiUrl}/api/accomplishments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newRecord)
+                });
+                if (response.ok) {
+                    const savedItem = await response.json();
+                    state.accomplishments.unshift(savedItem);
+                    resetForm();
+                    triggerToast('Logged successfully to cloud VPS!');
+                    setActiveTab('history');
+                } else throw new Error();
+            } catch (err) {
+                triggerToast('Network Error! Record saved locally under Sandbox.', 'danger');
+                state.isSandbox = true;
+                state.accomplishments = SandboxStorage.add(newRecord);
+                updateSandboxUI();
+                resetForm();
+                setActiveTab('history');
+            }
+        });
+
+        async function deleteAchievement(id) {
+            if (!confirm("Are you sure you want to permanently delete this record?")) return;
+            
+            if (state.isSandbox) {
+                state.accomplishments = SandboxStorage.remove(id);
+                recalculateStats(); renderHistory();
+                triggerToast("Deleted locally.", "warning");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${appConfig.apiUrl}/api/accomplishments/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    state.accomplishments = state.accomplishments.filter(x => x.id !== id);
+                    recalculateStats(); renderHistory();
+                    triggerToast("Record deleted from cloud server.", "warning");
+                } else throw new Error();
+            } catch (e) {
+                triggerToast("Failed to delete from server.", "danger");
+            }
+        }
+
+        async function submitEdit() {
+            const updatedText = document.getElementById("modalEditInput").value.trim();
+            if (!updatedText || !state.editingId) return;
+
+            if (state.isSandbox) {
+                state.accomplishments = SandboxStorage.update(state.editingId, updatedText);
+                closeEditModal();
+                renderHistory();
+                triggerToast("Updated locally.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${appConfig.apiUrl}/api/accomplishments/${state.editingId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accomplishment: updatedText })
+                });
+                if (response.ok) {
+                    const idx = state.accomplishments.findIndex(x => x.id === state.editingId);
+                    if(idx > -1) state.accomplishments[idx].accomplishment = updatedText;
+                    closeEditModal();
+                    renderHistory();
+                    triggerToast("Record updated on server.");
+                } else throw new Error();
+            } catch (e) {
+                triggerToast("Update failed on server.", "danger");
+            }
+        }
+
+        function downloadFile(content, filename, type) {
+            if(state.accomplishments.length === 0) { triggerToast("No data to export!", "warning"); return; }
+            const blob = new Blob([content], { type: type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            triggerToast(`Exported ${filename} successfully!`);
+        }
+
+        document.getElementById('btn-download-txt').addEventListener('click', () => {
+            let md = `# Professional Work Accomplishments Log\n`;
+            md += `Generated on ${getFormattedDate()}\n`;
+            md += `Total wins: ${state.accomplishments.length}\n`;
+            md += `====================================================\n\n`;
+            
+            const grouped = {};
+            state.accomplishments.forEach(it => {
+                if(!grouped[it.date_str]) grouped[it.date_str] = [];
+                grouped[it.date_str].push(it);
+            });
+            for(const [date, items] of Object.entries(grouped)) {
+                md += `## 📅 ${date}\n`;
+                items.forEach(i => {
+                    md += `[${i.tag.toUpperCase()}] - ${new Date(i.timestamp).toLocaleTimeString()}\n`;
+                    md += `${i.accomplishment}\n\n`;
+                });
+                md += `---\n\n`;
+            }
+            downloadFile(md, `Accomplishments_${new Date().toISOString().slice(0,10)}.txt`, 'text/plain;charset=utf-8;');
+        });
+
+        document.getElementById('btn-download-csv').addEventListener('click', () => {
+            let csv = "ID,Timestamp,Date,Tag,Accomplishment\r\n";
+            state.accomplishments.forEach(i => {
+                const text = i.accomplishment.replace(/"/g, '""');
+                csv += `"${i.id}","${i.timestamp}","${i.date_str}","${i.tag}","${text}"\r\n`;
+            });
+            downloadFile(csv, `Accomplishments_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
+        });
+
+        function setActiveTab(tab) {
+            const writeTab = document.getElementById("tabWrite");
+            const historyTab = document.getElementById("tabHistory");
+            const wBtn = document.getElementById("writeTabBtn");
+            const hBtn = document.getElementById("historyTabBtn");
+            const activeClass = "flex-1 sm:flex-none py-3 px-6 font-bold text-sm border-b-2 border-deriv-red text-deriv-red flex items-center justify-center space-x-2";
+            const inactiveClass = "flex-1 sm:flex-none py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-deriv-red flex items-center justify-center space-x-2";
+
+            if (tab === 'write') {
+                writeTab.classList.remove("hidden"); historyTab.classList.add("hidden");
+                wBtn.className = activeClass; hBtn.className = inactiveClass;
+            } else {
+                writeTab.classList.add("hidden"); historyTab.classList.remove("hidden");
+                hBtn.className = activeClass; wBtn.className = inactiveClass;
+                renderHistory();
+            }
+        }
+
+        function resetForm() {
+            winTextInput.value = '';
+            charCount.innerText = '0 / 2000 chars';
+            recalculateStats(); renderHistory();
+        }
+
+        winTextInput.addEventListener('input', (e) => {
+            charCount.innerText = `${e.target.value.length} / 2000 chars`;
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            state.searchQuery = e.target.value; renderHistory();
+        });
+
+        function insertPromptHelper(prefix) {
+            winTextInput.value = prefix + winTextInput.value;
+            winTextInput.focus();
+            charCount.innerText = `${winTextInput.value.length} / 2000 chars`;
+        }
+
+        function openEditModal(id) {
+            const item = state.accomplishments.find(x => x.id === id);
+            if (!item) return;
+            state.editingId = id;
+            document.getElementById("modalEditInput").value = item.accomplishment;
+            const modal = document.getElementById("editModal");
+            modal.classList.remove("hidden");
+            setTimeout(() => { modal.classList.remove("opacity-0"); modal.firstElementChild.classList.remove("scale-95"); }, 10);
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById("editModal");
+            modal.classList.add("opacity-0"); modal.firstElementChild.classList.add("scale-95");
+            setTimeout(() => { modal.classList.add("hidden"); state.editingId = null; }, 200);
+        }
+
+        function copyToClipboard(id) {
+            const item = state.accomplishments.find(x => x.id === id);
+            if (!item) return;
+            const el = document.createElement('textarea');
+            el.value = `[${item.date_str} - ${item.tag}]\n${item.accomplishment}`;
+            document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+            triggerToast("Copied to clipboard!");
+        }
+
+        function escapeHtml(str) { return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+
+        // Initial loading operations
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            updateSandboxUI();
+            fetchData();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
