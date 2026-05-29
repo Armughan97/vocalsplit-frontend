@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Attendance Tracker</title>
+    <title>WorkTrack - Attendance Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -24,6 +24,9 @@
 
     <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center z-20">
         <div class="flex items-center gap-2">
+            <a href="index.html" class="p-2 text-gray-400 hover:text-gray-600 rounded-xl transition-all" title="Back to Hub">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
             <i data-lucide="clock" class="text-blue-600"></i>
             <h1 class="text-xl font-bold text-gray-900">WorkTrack</h1>
         </div>
@@ -70,7 +73,7 @@
             </div>
 
             <!-- Leave Management -->
-            <div class="w-full">
+            <div class="w-full font-sans">
                 <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Log Leaves (Adds 8 Hours)</h3>
                 <div class="flex flex-col gap-3">
                     <button id="btnLeavePH" onclick="toggleLeave('PUBLIC_HOLIDAY')" class="w-full flex items-center justify-between p-4 bg-purple-50 text-purple-700 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold border border-purple-200">
@@ -126,10 +129,9 @@
     <div id="toastContainer" class="fixed bottom-24 left-0 right-0 z-50 flex flex-col items-center space-y-2 pointer-events-none px-4"></div>
 
     <script>
-        lucide.createIcons();
-
-        const API_BASE = 'http://localhost:8000';
-        let isMockMode = false;
+        // Resolve target OCI VPS connection string dynamically from localStorage
+        const API_BASE = localStorage.getItem('vocal_split_api_url') || 'https://vocalsplit-api.duckdns.org';
+        let isMockMode = localStorage.getItem('worktrack_mock_mode') === 'true';
         let currentTab = 'main';
         let currentStateData = null;
 
@@ -138,6 +140,7 @@
             save() { localStorage.setItem('mockLogs', JSON.stringify(this.logs)); },
             handle(action, category) {
                 const now = new Date();
+                // Mon-Fri 6:00 AM - 12:00 AM validation
                 if (now.getDay() === 0 || now.getDay() === 6 || now.getHours() < 6) return { error: "Outside working hours" };
                 this.logs.push({ timestamp: now.toISOString(), action, category });
                 this.save();
@@ -176,7 +179,7 @@
                 for (const [dk, data] of Object.entries(days)) {
                     if (data.leave_type) {
                         totalSeconds += 8 * 3600;
-                        if (dk === now.toDateString()) state = 'OUT'; // Override IN status if leave active
+                        if (dk === now.toDateString()) state = 'OUT';
                     } else {
                         let dayDur = 0;
                         let inTime = null;
@@ -210,7 +213,6 @@
                 };
             },
             getHistory() {
-                // Simplified mock mapping, real detailed formatting relies on backend
                 return { weeks: [] };
             }
         };
@@ -218,14 +220,14 @@
         async function apiCall(endpoint, options = {}) {
             if (isMockMode) {
                 await new Promise(r => setTimeout(r, 200));
-                if (endpoint === '/api/status' && options.method === 'GET') return MockBackend.getStatus();
-                if (endpoint === '/api/punch' && options.method === 'POST') {
+                if (endpoint === '/api/attendance/status' && options.method === 'GET') return MockBackend.getStatus();
+                if (endpoint === '/api/attendance/punch' && options.method === 'POST') {
                     const body = JSON.parse(options.body);
                     const res = MockBackend.handle(body.action, body.category);
                     if (res.error) throw new Error(res.error);
                     return res;
                 }
-                if (endpoint === '/api/history') return MockBackend.getHistory();
+                if (endpoint === '/api/attendance/history') return MockBackend.getHistory();
             }
 
             try {
@@ -234,8 +236,8 @@
                     headers: { 'Content-Type': 'application/json', ...options.headers }
                 });
                 if (!res.ok) {
-                    if (res.status === 404) throw new Error('404: Endpoint not found');
-                    if (res.status === 500) throw new Error('500: Internal Server Error');
+                    if (res.status === 404) throw new Error('404: Endpoint not found on OCI Gateway.');
+                    if (res.status === 500) throw new Error('500: Gateway Internal Error');
                     if (res.status === 502) throw new Error('502: Bad Gateway');
                     const errData = await res.json().catch(()=>({}));
                     throw new Error(errData.detail || `Error ${res.status}`);
@@ -243,7 +245,7 @@
                 if (options.isDownload) return res.blob();
                 return await res.json();
             } catch (err) {
-                if (err.name === 'TypeError' && err.message.includes('fetch')) throw new Error('Network Error - Server unreachable');
+                if (err.name === 'TypeError' && err.message.includes('fetch')) throw new Error('Network Error - OCI Node unreachable');
                 throw err;
             }
         }
@@ -251,7 +253,7 @@
         async function refreshUI() {
             try {
                 if (currentTab === 'main') {
-                    const data = await apiCall('/api/status', { method: 'GET' });
+                    const data = await apiCall('/api/attendance/status', { method: 'GET' });
                     currentStateData = data;
                     
                     if (!data.is_working_hours) {
@@ -275,14 +277,11 @@
                     const percent = Math.min(data.completed_hours / data.target_hours, 1);
                     circle.style.strokeDashoffset = circumference - (percent * circumference);
 
-                    // Setup buttons based on leave status
                     const leaveActive = data.active_leave_today;
                     
-                    // Punch Buttons
                     document.getElementById('btnIn').disabled = leaveActive ? true : (data.state === 'IN');
                     document.getElementById('btnOut').disabled = leaveActive ? true : (data.state !== 'IN');
 
-                    // Leave Buttons styling map
                     const leaves = [
                         { id: 'btnLeavePH', key: 'PUBLIC_HOLIDAY', base: 'bg-purple-50 text-purple-700', active: 'bg-purple-600 text-white shadow-lg' },
                         { id: 'btnLeaveAL', key: 'ANNUAL_LEAVE', base: 'bg-blue-50 text-blue-700', active: 'bg-blue-600 text-white shadow-lg' },
@@ -293,18 +292,15 @@
                         const el = document.getElementById(l.id);
                         const indicator = el.querySelector('.indicator');
                         
-                        // Reset classes
                         el.className = `w-full flex items-center justify-between p-4 rounded-xl transition-all font-semibold border ${l.base}`;
                         indicator.classList.add('hidden');
                         el.disabled = false;
 
                         if (leaveActive) {
                             if (leaveActive === l.key) {
-                                // This is the active leave
                                 el.className = `w-full flex items-center justify-between p-4 rounded-xl transition-all font-semibold border-transparent ${l.active}`;
                                 indicator.classList.remove('hidden');
                             } else {
-                                // Other leaves are disabled
                                 el.disabled = true;
                                 el.classList.add('opacity-50', 'cursor-not-allowed');
                             }
@@ -312,7 +308,7 @@
                     });
 
                 } else {
-                    const data = await apiCall('/api/history', { method: 'GET' });
+                    const data = await apiCall('/api/attendance/history', { method: 'GET' });
                     renderHistory(data.weeks);
                 }
             } catch (e) {
@@ -323,7 +319,7 @@
 
         async function handlePunch(action, category = 'NORMAL') {
             try {
-                await apiCall('/api/punch', { method: 'POST', body: JSON.stringify({ action, category }) });
+                await apiCall('/api/attendance/punch', { method: 'POST', body: JSON.stringify({ action, category }) });
                 
                 let msg = `Logged ${action}`;
                 if (action === 'LEAVE') msg = `${category.replace('_', ' ')} applied (8h added)`;
@@ -339,9 +335,9 @@
         function toggleLeave(category) {
             if (!currentStateData) return;
             if (currentStateData.active_leave_today === category) {
-                handlePunch('CANCEL_LEAVE', 'NORMAL'); // Remove it
+                handlePunch('CANCEL_LEAVE', 'NORMAL');
             } else {
-                handlePunch('LEAVE', category); // Set it
+                handlePunch('LEAVE', category);
             }
         }
 
@@ -351,7 +347,7 @@
                 return;
             }
             try {
-                const blob = await apiCall('/api/download', { method: 'GET', isDownload: true });
+                const blob = await apiCall('/api/attendance/download', { method: 'GET', isDownload: true });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -369,7 +365,7 @@
         function renderHistory(weeks) {
             const container = document.getElementById('historyList');
             if (!weeks || weeks.length === 0) {
-                container.innerHTML = `<div class="text-center text-gray-500 py-8">No records found.</div>`;
+                container.innerHTML = `<div class="text-center text-gray-500 py-8">No records found. Setup VPS Connection mode to see full history databases.</div>`;
                 return;
             }
 
@@ -433,23 +429,43 @@
             }, 3000);
         }
 
-        document.getElementById('mockToggle').addEventListener('click', (e) => {
+        const mockToggle = document.getElementById('mockToggle');
+        const mockKnob = document.getElementById('mockKnob');
+
+        // Apply visual state of toggle on launch
+        if (isMockMode) {
+            mockToggle.classList.replace('bg-gray-300', 'bg-blue-500');
+            mockKnob.classList.add('translate-x-6');
+        }
+
+        mockToggle.addEventListener('click', (e) => {
             isMockMode = !isMockMode;
-            const btn = e.currentTarget;
-            const knob = document.getElementById('mockKnob');
+            localStorage.setItem('worktrack_mock_mode', isMockMode);
             if (isMockMode) {
-                btn.classList.replace('bg-gray-300', 'bg-blue-500');
-                knob.classList.add('translate-x-6');
+                mockToggle.classList.replace('bg-gray-300', 'bg-blue-500');
+                mockKnob.classList.add('translate-x-6');
                 showToast('Mock Mode Enabled', 'info');
             } else {
-                btn.classList.replace('bg-blue-500', 'bg-gray-300');
-                knob.classList.remove('translate-x-6');
+                mockToggle.classList.replace('bg-blue-500', 'bg-gray-300');
+                mockKnob.classList.remove('translate-x-6');
                 showToast('Live Mode Enabled', 'info');
             }
             refreshUI();
         });
 
-        switchTab('main');
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            switchTab('main');
+            lucide.createIcons();
+        });
+
+        function initTheme() {
+            const savedDark = localStorage.getItem('theme_dark') === 'true';
+            if (savedDark) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
         setInterval(() => {
             if (currentTab === 'main' && document.getElementById('viewRest').classList.contains('hidden')) refreshUI();
         }, 60000);
